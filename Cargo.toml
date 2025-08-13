@@ -1,0 +1,16 @@
+[package]
+name = "chatterbox"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[profile.release]
+strip = "symbols"
+lto = "fat"
+codegen-units = 1
+
+[dependencies]
+actix-web = "4.11.0"
+actix-web-lab = "0.24.2"
+parking_lot = "0.12.4"
