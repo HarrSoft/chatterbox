@@ -9,7 +9,7 @@ pub struct AppState {
 }
 
 impl AppState {
-  pub async fn new(db: &str) -> Result<Self, sqlx::Error> {
+  pub async fn new(db: impl AsRef<str>) -> Result<Self, sqlx::Error> {
     Self {
       client_streams: RwLock::new(HashMap::new()),
       db: PgPoolOptions::new().connect(db).await?,
