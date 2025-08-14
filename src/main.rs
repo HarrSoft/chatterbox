@@ -1,10 +1,17 @@
-use actix_web::{get, post, web, App, HttpServer, Responder, Response};
-use actix_web_lab::sse: Sse;
-use parking_lot::Mutex;
-use std::collections::HashMap;
+use actix_web::{
+  get,
+  post,
+  web,
+  App,
+  HttpResponse,
+  HttpServer,
+  Responder,
+};
+use actix_web_lab::sse::Sse;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
-enum CUID2(String);
+struct CUID2(String);
 
 struct Message {
   to: String,
@@ -19,20 +26,20 @@ async fn message(state: web::Data<AppState>) -> impl Responder {
   if let Some(tx) = pool.get(todo!()) {
     tx.send(todo!());
   }
-  Response::Ok();
+  HttpResponse::Ok();
 }
 
 #[get("/subscribe")]
 async fn subscribe(state: web::Data<AppState>) -> impl Responder {
   // validate session token
-  todo!();
+  //TODO
 
   let (tx, rx) = mpsc::channel(10);
 
   // register channel
   {
-    let mut pool = data.pool.lock();
-    pool.insert(todo!(), )
+    let mut pool = state.pool.lock();
+    pool.insert("asdf", tx);
   }
 
   Sse::from_infallible_receiver(rx)
@@ -40,14 +47,13 @@ async fn subscribe(state: web::Data<AppState>) -> impl Responder {
 }
 
 struct AppState {
+  db: PgPool,
   pool: Mutex<HashMap<CUID2, Sender>>,
 }
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
-  let state = web::Data::new(AppState {
-    pool: Mutex::new(HashMap::new()),
-  });
+async fn main() -> Result<(), impl Error> {
+  let state = web::Data::new(state::AppState::new("")?);
 
   HttpServer::new(move || {
     App::new()
