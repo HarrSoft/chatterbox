@@ -1,6 +1,10 @@
 # chatterbox
 A simple microservice for delivering asynchronous messages to web clients.
 
+# External Dependencies
+
+This package depends on OpenSSL on platforms that are not windows and mac os.
+
 # APIs
 
 ## `POST /message`
