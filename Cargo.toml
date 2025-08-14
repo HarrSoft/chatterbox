@@ -14,6 +14,7 @@ codegen-units = 1
 actix-web = "4.11.0"
 actix-web-lab = "0.24.2"
 parking_lot = "0.12.4"
+serde = "1.0.219"
 sha2 = "0.10.9"
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-native-tls", "postgres"]}
 tokio = "1.47.1"

@@ -423,6 +423,7 @@ dependencies = [
  "actix-web",
  "actix-web-lab",
  "parking_lot",
+ "serde",
  "sha2",
  "sqlx",
  "tokio",
