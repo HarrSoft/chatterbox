@@ -16,11 +16,21 @@ use crate::{
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-struct Message {
-  to: String,
-  at: String,
-  kind: String,
-  body: String,
+#[actix_web::main]
+async fn main() -> Result<(), dyn Error> {
+  let env = config::Env::nab();
+
+  let state = web::Data::new(AppState::new(env.database_url)?);
+
+  HttpServer::new(move || {
+    App::new()
+    .app_data(state.clone())
+    .service(message)
+    .service(subscribe)
+  })
+  .bind(("0.0.0.0", 8080))?
+  .run()
+  .await
 }
 
 #[post("/message")]
@@ -76,19 +86,4 @@ async fn subscribe(
   // stream incoming messages
   Sse::from_infallible_receiver(rx)
     .with_retry_duration(Duration::from_secs(10))
-}
-
-#[actix_web::main]
-async fn main() -> Result<(), dyn Error> {
-  let state = web::Data::new(AppState::new("")?);
-
-  HttpServer::new(move || {
-    App::new()
-    .app_data(state.clone())
-    .service(message)
-    .service(subscribe)
-  })
-  .bind(("127.0.0.1", 8080))?
-  .run()
-  .await
 }
