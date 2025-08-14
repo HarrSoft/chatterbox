@@ -8,10 +8,13 @@ use actix_web::{
   Responder,
 };
 use actix_web_lab::sse::Sse;
+use crate::{
+  backlog::fetch_backlog,
+  session::fetch_session,
+  state::AppState,
+};
 use std::time::Duration;
 use tokio::sync::mpsc;
-
-struct CUID2(String);
 
 struct Message {
   to: String,
@@ -30,30 +33,54 @@ async fn message(state: web::Data<AppState>) -> impl Responder {
 }
 
 #[get("/subscribe")]
-async fn subscribe(state: web::Data<AppState>) -> impl Responder {
-  // validate session token
-  //TODO
+async fn subscribe(
+  state: web::Data<AppState>,
+  ts: web::Query<&str>,
+  req: HttpRequest,
+) -> impl Responder {
+  // get session cookie
+  let Some(cookie) = req.cookie("session") else {
+    return HttpResponse::Unauthorized();
+  };
+
+  // get session from db
+  let session = match fetch_session(&state, cookie.value()) {
+    Ok(session) => session,
+    Err(e) => {
+      error!("Failed to fetch session: {}", e);
+      return HttpResponse::Unauthorized();
+    },
+  };
 
   let (tx, rx) = mpsc::channel(10);
 
   // register channel
   {
     let mut pool = state.pool.lock();
-    pool.insert("asdf", tx);
+    pool.insert(session.user_id, tx.clone());
   }
 
-  Sse::from_infallible_receiver(rx)
-  .with_retry_duration(Duration::from_secs(10))
-}
+  // backfill old messages
+  tokio::spawn(async move || {
+    let backlog = fetch_backlog(session.user_id, ts).await;
+    match backlog {
+      Ok(bl) => for message in bl {
+        tx.send(message);
+      },
+      Err(e) => {
+        warn!("Failed to fetch backlog: {:?}", e);
+      },
+    }
+  });
 
-struct AppState {
-  db: PgPool,
-  pool: Mutex<HashMap<CUID2, Sender>>,
+  // stream incoming messages
+  Sse::from_infallible_receiver(rx)
+    .with_retry_duration(Duration::from_secs(10))
 }
 
 #[actix_web::main]
-async fn main() -> Result<(), impl Error> {
-  let state = web::Data::new(state::AppState::new("")?);
+async fn main() -> Result<(), dyn Error> {
+  let state = web::Data::new(AppState::new("")?);
 
   HttpServer::new(move || {
     App::new()
