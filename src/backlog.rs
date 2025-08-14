@@ -1,33 +1,39 @@
-use crate::state::AppState;
+use crate::{
+  state::AppState,
+  Message,
+};
+use time::PrimitiveDateTime;
 
 pub async fn fetch_backlog(
   state: &AppState,
   user_id: impl AsRef<str>,
-  timestamp: Option<impl AsRef<str>>,
+  timestamp: Option<PrimitiveDateTime>,
 ) -> Result<Vec<Message>, sqlx::Error> {
-  let messages = if let Some(ts) = timestamp {
-    sqlx::query_as("\
-      SELECT * \
-      FROM Chatterbox \
-      WHERE userId = $1 \
-        AND createdAt > $2 \
-      ORDER BY createdAt ASC;\
-    ")
-      .bind(user_id.as_ref())
-      .bind(ts.as_ref())
+  let rows: Vec<Message> = if let Some(ts) = timestamp {
+    sqlx::query_as(r#"
+      SELECT *
+      FROM ChatterboxMessage
+      WHERE userId = $1
+        AND createdAt > $2
+      ORDER BY createdAt DESC
+      LIMIT 100;
+    "#)
+      .bind::<&str>(user_id.as_ref())
+      .bind(ts)
       .fetch_all(&state.db)
       .await?
   } else {
-    sqlx::query_as("\
-      SELECT * \
-      FROM Chatterbox \
-      WHERE userId = $1\
-      ORDER BY createdAt ASC;\
-    ")
-      .bind(user_id.as_ref())
+    sqlx::query_as(r#"
+      SELECT *
+      FROM ChatterboxMessage
+      WHERE userId = $1
+      ORDER BY createdAt DESC
+      LIMIT 100;
+    "#)
+      .bind::<&str>(user_id.as_ref())
       .fetch_all(&state.db)
       .await?
   };
 
-  todo!();
+  Ok(rows)
 }

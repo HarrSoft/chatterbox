@@ -1,6 +1,7 @@
-use crate::CUID2;
+use crate::{CUID2, Message};
 use parking_lot::RwLock;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgPool, PgPoolOptions};
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 
 pub struct AppState {
@@ -10,9 +11,9 @@ pub struct AppState {
 
 impl AppState {
   pub async fn new(db: impl AsRef<str>) -> Result<Self, sqlx::Error> {
-    Self {
+    Ok(Self {
       client_streams: RwLock::new(HashMap::new()),
-      db: PgPoolOptions::new().connect(db).await?,
-    }
+      db: PgPoolOptions::new().connect(db.as_ref()).await?,
+    })
   }
 }

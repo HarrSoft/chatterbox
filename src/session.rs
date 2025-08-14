@@ -28,7 +28,7 @@ pub async fn fetch_session(
     FROM Session \
     WHERE token = $1;\
   ")
-    .bind(token.as_ref())
+    .bind(&token)
     .fetch_one(&state.db)
     .await?;
 
@@ -39,7 +39,7 @@ fn encode_token(data: impl AsRef<[u8]>) -> String {
   let digest = Sha256::digest(data);
   let mut buffer = String::with_capacity(digest.len() * 2);
   for byte in digest {
-    write!(&mut buffer, "{:x?}", byte);
+    write!(&mut buffer, "{:x?}", byte).unwrap();
   }
   buffer
 }

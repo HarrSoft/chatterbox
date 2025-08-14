@@ -3,24 +3,35 @@ use actix_web::{
   post,
   web,
   App,
+  HttpRequest,
   HttpResponse,
   HttpServer,
   Responder,
 };
 use actix_web_lab::sse::Sse;
-use crate::{
+use chatterbox::{
   backlog::fetch_backlog,
+  config::Env,
+  database,
   session::fetch_session,
   state::AppState,
+  CUID2,
+  Message,
 };
+use log::*;
+use serde::Deserialize;
 use std::time::Duration;
+use time::OffsetDateTime;
 use tokio::sync::mpsc;
 
 #[actix_web::main]
-async fn main() -> Result<(), dyn Error> {
-  let env = config::Env::nab();
+async fn main() {
+  let env = Env::nab();
 
-  let state = web::Data::new(AppState::new(env.database_url)?);
+  let state = web::Data::new(AppState::new(env.database_url).await.unwrap());
+
+  // initialize database if needed
+  database::postgres::init(&state.db).await.unwrap();
 
   HttpServer::new(move || {
     App::new()
@@ -28,18 +39,55 @@ async fn main() -> Result<(), dyn Error> {
     .service(message)
     .service(subscribe)
   })
-  .bind(("0.0.0.0", 8080))?
+  .bind(("0.0.0.0", 8080)).unwrap()
   .run()
-  .await
+  .await;
+}
+
+#[derive(Deserialize)]
+struct PostMessageArgs {
+  to: CUID2,
+  kind: String,
+  body: String,
 }
 
 #[post("/message")]
-async fn message(state: web::Data<AppState>) -> impl Responder {
-  let mut pool = state.pool.lock();
-  if let Some(tx) = pool.get(todo!()) {
-    tx.send(todo!());
+async fn message(
+  state: web::Data<AppState>,
+  args: web::Json<PostMessageArgs>,
+) -> impl Responder {
+  // assemble message from request body
+  let PostMessageArgs { to, kind, body } = args.0;
+  let message = Message {
+    id: cuid2::create_id(),
+    to,
+    kind,
+    body,
+    created_at: OffsetDateTime::now_utc(),
+  };
+
+  // transmit message
+  {
+    let client_streams = state.client_streams.read();
+    if let Some(tx) = client_streams.get(&message.to) {
+      tx.send(message.clone());
+    }
   }
-  HttpResponse::Ok();
+
+  // store message
+  sqlx::query(r#"
+    INSERT INTO "Chatterbox" ("id", "to", "kind", "body", "createdAt")
+    VALUES ($1, $2, $3, $4, $5);
+  "#)
+    .bind(message.id)
+    .bind(message.to)
+    .bind(message.kind)
+    .bind(message.body)
+    .bind(message.created_at)
+    .execute(&state.db)
+    .await;
+
+  HttpResponse::Ok().finish()
 }
 
 #[get("/subscribe")]
@@ -50,15 +98,15 @@ async fn subscribe(
 ) -> impl Responder {
   // get session cookie
   let Some(cookie) = req.cookie("session") else {
-    return HttpResponse::Unauthorized();
+    return HttpResponse::Unauthorized().finish();
   };
 
   // get session from db
-  let session = match fetch_session(&state, cookie.value()) {
+  let session = match fetch_session(&state, cookie.value()).await {
     Ok(session) => session,
     Err(e) => {
       error!("Failed to fetch session: {}", e);
-      return HttpResponse::Unauthorized();
+      return HttpResponse::Unauthorized().finish();
     },
   };
 
@@ -66,8 +114,8 @@ async fn subscribe(
 
   // register channel
   {
-    let mut pool = state.pool.lock();
-    pool.insert(session.user_id, tx.clone());
+    let mut streams = state.client_streams.write();
+    streams.insert(session.user_id, tx.clone());
   }
 
   // backfill old messages
