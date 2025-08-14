@@ -2,12 +2,12 @@ use crate::{
   state::AppState,
   Message,
 };
-use time::PrimitiveDateTime;
+use time::OffsetDateTime;
 
 pub async fn fetch_backlog(
   state: &AppState,
   user_id: impl AsRef<str>,
-  timestamp: Option<PrimitiveDateTime>,
+  timestamp: Option<OffsetDateTime>,
 ) -> Result<Vec<Message>, sqlx::Error> {
   let rows: Vec<Message> = if let Some(ts) = timestamp {
     sqlx::query_as(r#"

@@ -8,7 +8,7 @@ use actix_web::{
   HttpServer,
   Responder,
 };
-use actix_web_lab::sse::Sse;
+use actix_web_lab::sse;
 use chatterbox::{
   backlog::fetch_backlog,
   config::Env,
@@ -39,7 +39,7 @@ async fn main() {
     .service(message)
     .service(subscribe)
   })
-  .bind(("0.0.0.0", 8080)).unwrap()
+  .bind(env.bind_address).unwrap()
   .run()
   .await;
 }
@@ -120,10 +120,11 @@ async fn subscribe(
 
   // backfill old messages
   tokio::spawn(async move || {
-    let backlog = fetch_backlog(session.user_id, ts).await;
+    let backlog = fetch_backlog(&session.user_id, ts).await;
     match backlog {
-      Ok(bl) => for message in bl {
-        tx.send(message);
+      Ok(blz) => for message in blz {
+        let json = sse::Data::new_json(message);
+        tx.send(Event::Data(json));
       },
       Err(e) => {
         warn!("Failed to fetch backlog: {:?}", e);
@@ -132,6 +133,6 @@ async fn subscribe(
   });
 
   // stream incoming messages
-  Sse::from_infallible_receiver(rx)
+  sse::Sse::from_infallible_receiver(rx)
     .with_retry_duration(Duration::from_secs(10))
 }

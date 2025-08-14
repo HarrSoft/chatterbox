@@ -2,6 +2,8 @@ use crate::state::AppState;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 
+#[derive(sqlx::FromRow)]
+#[sqlx(rename_all = "camelCase")]
 pub struct Session {
   pub id: String,
   pub user_id: String,
@@ -13,26 +15,14 @@ pub async fn fetch_session(
   state: &AppState,
   token: impl AsRef<[u8]>,
 ) -> Result<Session, sqlx::Error> {
-  let token = encode_token(token);
-
-  let (
-    id,
-    user_id,
-    expires,
-  ): (
-    String,
-    String,
-    String,
-  ) = sqlx::query_as("\
-    SELECT id, userId, expires \
-    FROM Session \
-    WHERE token = $1;\
-  ")
-    .bind(&token)
+  sqlx::query_as(r#"
+    SELECT "id", "userId", "expires"
+    FROM "Session"
+    WHERE "token" = $1;
+  "#)
+    .bind(&encode_token(token))
     .fetch_one(&state.db)
-    .await?;
-
-  Ok(Session { id, user_id, expires, token })
+    .await
 }
 
 fn encode_token(data: impl AsRef<[u8]>) -> String {
