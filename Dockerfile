@@ -1,5 +1,6 @@
 FROM rust:1.89-alpine3.22 AS builder
 WORKDIR /build
+RUN apk add openssl-dev
 COPY . .
 RUN cargo build --release
 
